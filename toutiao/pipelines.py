@@ -18,3 +18,4 @@ class ToutiaoDbPipeline(object):
 
     def process_item(self, item, spider):
         insert_toutiao_article(item)
+

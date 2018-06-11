@@ -85,6 +85,8 @@ class HttpProxyMiddleware(object):
         :param proxy_port: 代理端口
         :return:
         """
+        request.meta['proxy_ip'] = proxy_ip
+        request.meta['proxy_port'] = proxy_port
         request.meta['proxy'] = 'http://%s:%s' % (proxy_ip, proxy_port)
         logging.debug('set proxy: proxy_ip is %s, proxy_port is %s' % (proxy_ip, proxy_port))
 
@@ -106,13 +108,19 @@ class HttpProxyMiddleware(object):
         :param request: 原始请求
         :return:
         """
-        proxy_info = None
+        time.sleep(1)
+        retry_times = request.meta['proxy_retry_times']
+        if 'proxy_ip' in request.meta and 'proxy_port' in request.meta:
+            proxy_ip = request.meta['proxy_ip']
+            proxy_port = request.meta['proxy_port']
+            proxy_info = {'ip': proxy_ip, 'port': proxy_port}
         try:
-            time.sleep(1)
-            retry_times = request.meta['proxy_retry_times']
             if retry_times > self.proxy_retry_times:
                 logging.error('no enough retry times, url is %s' % request.url)
-                return
+                if proxy_info and proxy_info in self.proxy_info_list:
+                    update_proxy_info_invalid(proxy_ip, proxy_ip, 'retry time is great than %s times' % retry_times)
+                    self.proxy_info_list.remove(proxy_info)
+                return False
             if len(self.proxy_info_list) <= self.proxy_info_list_min_size:
                 self.reload_proxy_info_list()
             if len(self.proxy_info_list) > 0:
@@ -121,23 +129,21 @@ class HttpProxyMiddleware(object):
                 proxy_port = proxy_info['port']
                 self.set_proxy(request, proxy_ip, proxy_port)
                 self.verify_proxy(proxy_ip, proxy_port)
-                logging.info('use proxy: request_url is %s, proxy_info is %s' % (request.url, proxy_info))
+                logging.info('use proxy: request_url is %s, proxy_info is %s, proxy_retry_times is %s' % (request.url, proxy_info, retry_times))
                 update_proxy_info_use_times(proxy_ip, proxy_port)
+                request.meta['proxy_retry_times'] = retry_times + 1
             else:
                 raise Exception('no data in proxy info list')
         except Exception as e:
-            logging.exception('user proxy error, reason is %s' % e.message)
-            if proxy_info:
-                update_proxy_info_invalid(proxy_info['ip'], proxy_info['port'], e.message)
-                if proxy_info in self.proxy_info_list:
-                    self.proxy_info_list.remove(proxy_info)
-            self.use_proxy(request)
-        finally:
+            logging.error('user proxy error, reason is %s' % e.message)
             request.meta['proxy_retry_times'] = retry_times + 1
+            self.use_proxy(request)
+        return True
 
     def process_request(self, request, spider):
-        request.meta['proxy_retry_times'] = 0
-        # self.use_proxy(request, 3)
+        if not request.meta.get('proxy') or not request.meta['proxy_retry_times']:
+            request.meta['proxy_retry_times'] = 0
+            self.use_proxy(request)
 
     def process_response(self, request, response, spider):
         index_html = response.body
@@ -145,9 +151,15 @@ class HttpProxyMiddleware(object):
         if 'data' in index_json:
             data = index_json['data']
             if len(data) == 0:
-                self.use_proxy(request)
-                return request
+                need_retry = self.use_proxy(request)
+                if need_retry:
+                    return request
         return response
+
+    def process_exception(self, request, exception, spider):
+        error_proxy = request.meta.get('proxy')
+        if not error_proxy:
+            return None
 
 
 class UserAgentMiddleware(object):
@@ -163,4 +175,4 @@ class UserAgentMiddleware(object):
 
     def process_request(self, request, spider):
         user_agent = random.choice(self.user_agent_list)
-        request.headers['User-Agent'] = user_agent
+        request.headers['User-Agent'] = fake_useragent.UserAgent().random

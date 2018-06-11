@@ -8,7 +8,7 @@ import time
 
 from scrapy import Spider, Request
 
-from tools.database_tools import get_spider_conn
+from tools.database_tools import get_need_crawl_toutiao_user_list, update_toutiao_user_status
 from tools.emoji_tools import remove_emoji
 from tools.url_tools import get_index_url
 from ..items import ToutiaoIndexItem
@@ -28,20 +28,15 @@ class ToutiaoSpider(Spider):
         开始的请求
         :return:
         """
-        query = 'select user_id, media_id, name from spider_toutiao_user where id <= 70000 and user_id not in (select distinct(user_id) from spider_toutiao_article) and status = 0 order by id asc'
-        spider_conn = get_spider_conn()
-        spider_cursor = spider_conn.cursor()
-        spider_cursor.execute(query)
-        rows = spider_cursor.fetchall()
-        total = len(rows)
-        self.logger.info('begin crawl query is {}, total is {}'.format(query, total))
-        for row in rows:
-            user_id = row[0]
-            media_id = row[1]
-            url = get_index_url(user_id, media_id)
-            yield Request(url=url, callback=self.parse_index, meta={'user_id': user_id, 'media_id': media_id}, dont_filter=True)
-        spider_cursor.close()
-        spider_conn.close()
+        user_list = get_need_crawl_toutiao_user_list()
+        if user_list:
+            total_user_count = len(user_list)
+            self.logger.info('begin crawl user list, total is %s' % total_user_count)
+            for user in user_list:
+                user_id = user[0]
+                media_id = user[1]
+                url = get_index_url(user_id, media_id)
+                yield Request(url=url, callback=self.parse_index, meta={'user_id': user_id, 'media_id': media_id}, dont_filter=True)
 
     def parse_index(self, response):
         """
@@ -85,7 +80,12 @@ class ToutiaoSpider(Spider):
                     item['content_type'] = 2 if article['has_video'] else 0
                     item['publish_time'] = article['publish_time']
                     item['datetime'] = article['datetime']
+                    items.append(item)
                     yield item
+            if len(items) > 0:
+                update_toutiao_user_status(user_id, media_id, 1)
+            else:
+                update_toutiao_user_status(user_id, media_id, -1)
         except Exception as e:
             self.logger.exception('crawl toutiao index has an error {}'.format(e))
 

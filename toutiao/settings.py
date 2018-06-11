@@ -26,9 +26,9 @@ CONCURRENT_REQUESTS = 16
 # Configure a delay for requests for the same website (default: 0)
 # See https://doc.scrapy.org/en/latest/topics/settings.html#download-delay
 # See also autothrottle settings and docs
-DOWNLOAD_DELAY = 0.5
+DOWNLOAD_DELAY = 0.25
 # The download delay setting will honor only one of:
-CONCURRENT_REQUESTS_PER_DOMAIN = 10
+CONCURRENT_REQUESTS_PER_DOMAIN = 50
 CONCURRENT_REQUESTS_PER_IP = 0
 
 # Disable cookies (enabled by default)
@@ -58,10 +58,11 @@ DEFAULT_REQUEST_HEADERS = {
 # Enable or disable downloader middlewares
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
-    # 'scrapy.contrib.downloadermiddleware.useragent.UserAgentMiddleware': None,
-    # 'scrapy.contrib.downloadermiddleware.httpproxy.HttpProxyMiddleware': None,
-    'toutiao.middlewares.HttpProxyMiddleware': 100,
-    'toutiao.middlewares.UserAgentMiddleware': 200,
+    'scrapy.contrib.downloadermiddleware.useragent.UserAgentMiddleware': None,
+    'toutiao.middlewares.UserAgentMiddleware': 100,
+    'toutiao.middlewares.HttpProxyMiddleware': 200,
+    'scrapy.contrib.downloadermiddleware.httpproxy.HttpProxyMiddleware': 300,
+
 }
 
 # Enable or disable extensions
@@ -114,9 +115,9 @@ REDIRECT_ENABLED = False
 HTTPERROR_ALLOWED_CODES = [301, 302]
 
 # 代理设置
-PROXY_SERVER_URL = 'http://47.106.180.108:8081/Index-generate_api_url.html?packid=2&fa=0&qty=5&port=1&format=json&ss=5&css=&ipport=1&et=1&pi=1&co=1&pro=&city='
+PROXY_SERVER_URL = 'http://47.106.180.108:8081/Index-generate_api_url.html?packid=2&fa=0&qty=3&port=1&format=json&ss=5&css=&ipport=1&et=1&pi=1&co=1&pro=&city='
 PROXY_VERIFY_URL = 'http://ip.chinaz.com/getip.aspx'
-PROXY_RETRY_TIMES = 3
+PROXY_RETRY_TIMES = 10
 PROXY_EXTRA_DELAY_SECONDS = 3
 PROXY_INFO_LIST_MAX_SIZE = 10
 PROXY_INFO_LIST_MIN_SIZE = 3
